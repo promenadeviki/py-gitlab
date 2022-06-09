@@ -2,6 +2,7 @@
 import http.client as httplib # Httplib was changed to http.client in python3
 import requests
 import os
+import logger import Logger
 from decouple import config
 from decorators import namespace
 from exceptions import GitLabServerError
@@ -20,6 +21,22 @@ class GitLab(object):
         self.use_ssl = use_ssl
         private_token = config('TOKEN')
         self._set_headers(private_token)
+        logging = Logger(__name__)
+
+
+    def log_info(argv):
+        '''
+        Helper functions for logging.
+        :param argv: arbitrary amount of type(str) arguments to log.
+        *argv builds list automatically
+        :return:
+        '''
+        logging.info(*argv)
+
+
+    def log_error(argv):
+       logging.error(*argv)
+
 
     @property
     def _base_url(self):
