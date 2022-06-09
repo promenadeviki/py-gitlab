@@ -35,7 +35,7 @@ class GitLab(object):
 
 
     def log_error(argv):
-       logging.error(*argv)
+        logging.error(*argv)
 
 
     @property
