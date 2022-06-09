@@ -5,21 +5,37 @@ import os
 from decouple import config
 from decorators import namespace
 from exceptions import GitLabServerError
+from flask import Flask, request
+from slack_sdk import WebClient
+from slack_bolt import App, Say
+from slack_bolt.adapter.flask import SlackRequestHandler
+
+
+app = Flask(__name__)
 
 
 class GitLab(object):
     # Use v4 gitlab api version. Others are deprecated in Python
     Version = 'v4'
     ResponseError = GitLabServerError
+    slack_bot_token = config('SLACK_BOT_TOKEN')
+    slack_sign_secret = config('SLACK_SIGNING_SECRET')
+    client = WebClient(slack_bot_token)
+    #bolt_app = App(slack_bot_token)
+    signing_secret = slack_sign_secret
 
-    def __init__(self, host=None, private_token=None, use_ssl=True):
+
+    def __init__(self, app, host=None, private_token=None, use_ssl=True):
         '''
         Uses decouple to parse .env file and also sets gitlab.com host
         '''
         self.host = host
         self.use_ssl = use_ssl
-        private_token = config('TOKEN')
-        self._set_headers(private_token)
+        self.private_token = config('TOKEN') # SET GITLAB TOKEN FOR HEADERS
+        self._set_headers(self.private_token)
+        self.handler = SlackRequestHandler(bolt_app)
+        self.bolt_app = App(slack_bot_token)
+        self.app = app
 
     @property
     def _base_url(self):
@@ -70,9 +86,11 @@ class GitLab(object):
         data = self._request('GET', path, **kwargs)
         return data
 
-    def get_all_projects(self, **kwargs):
+    @app.route("/projects/all", methods=["GET"])
+    def get_all_projects(**kwargs):
         """Get a list of all GitLab projects (admin only)."""
         path = '/projects/all'
+        #handler = SlackRequestHandler(bolt_app)
         data = self._request('GET', path, **kwargs)
         return data
 
@@ -224,3 +242,8 @@ class GitLab(object):
 
     def __repr__(self):
         return self.__str__()
+
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080, debug=True)
