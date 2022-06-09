@@ -1,11 +1,13 @@
-# -*- coding: utf-8 -*-
 import http.client as httplib # Httplib was changed to http.client in python3
 import requests
+import responses as rsp
 import os
-import logger import Logger
+from logger import logger
 from decouple import config
 from decorators import namespace
 from exceptions import GitLabServerError
+from slack import WebClient as SlackClient
+from triggers import get_response_key
 
 
 class GitLab(object):
@@ -13,12 +15,13 @@ class GitLab(object):
     Version = 'v4'
     ResponseError = GitLabServerError
 
-    def __init__(self, host=None, private_token=None, use_ssl=True):
+    def __init__(self, host=None, private_token=None, use_ssl=True, bot_name=None):
         '''
         Uses decouple to parse .env file and also sets gitlab.com host
         '''
         self.host = host
         self.use_ssl = use_ssl
+        bot_name = 'rileybot'
         private_token = config('TOKEN')
         self._set_headers(private_token)
         logging = Logger(__name__)
@@ -36,6 +39,35 @@ class GitLab(object):
 
     def log_error(argv):
         logging.error(*argv)
+
+
+    slack_token  = config('TOKEN')
+    slack_client = SlackClient(slack_token)
+
+    @classmethod
+    def handle_command(command=None, channel=None):
+        '''
+        Take cleaned command, look up response, and post to channel
+        '''
+
+    # Check for exact matches first then check for contained keywords
+    response_key = get_response_key(command, regex_type='match') or get_response_key(command, regex_type='search')
+
+    # Default behavior if no response keys match the command
+    if not (response_key or command):
+        # If no command is given
+        response_key = 'no_command'
+    elif not response_key:
+        response_key = 'search'
+        command = 'search ' + command
+
+    response = random.choice(response_dict[response_key])
+
+    # If response is a function, call it with command as argument
+    if callable(response):
+        response = response(command)
+
+    slack_client.api_call("chat.postMessage", channel=channel, text=response, as_user=True)
 
 
     @property
@@ -56,6 +88,21 @@ class GitLab(object):
                 private_token=private_token
             )
         })
+
+
+    def parse_slack_output(slack_rtm_output):
+        # Parses output data from Slack message stream
+        # read data from slack channels
+        output_list = slack_rtm_output
+        if output_list and len(output_list) > 0:
+            for output in output_list:
+                if output and 'text' in output:
+                    text = output['text']
+                    # if bot name is mentioned, take text to the right of the mention as the command
+                    if bot_name in text.lower():
+                        return text.lower().split(bot_name)[1].strip().lower(), output['channel']
+        return None, None
+
 
     def get_users(self, **kwargs):
         """Get a list of users."""
@@ -79,7 +126,8 @@ class GitLab(object):
         """Get a list of projects accessible by the authenticated user."""
         path = '/projects'
         data = self._request('GET', path, **kwargs)
-        return data
+        return handle_command(data)
+
 
     def get_owned_projects(self, **kwargs):
         """Get a list of projects which are owned by the authenticated user."""
@@ -92,6 +140,7 @@ class GitLab(object):
         path = '/projects/all'
         data = self._request('GET', path, **kwargs)
         return data
+
 
     @namespace
     def get_project(self, id=None):
@@ -241,3 +290,40 @@ class GitLab(object):
 
     def __repr__(self):
         return self.__str__()
+
+
+if __name__ == "__main__":
+
+    response_dict = {
+    'comic': [
+        'test'
+    ],
+    'define': [
+        "hey"
+    ],
+    'hello': [
+        "Sup",
+        "hey guys",
+        "yo",
+        "what's the word",
+        "hi"
+    ],
+    'projects': [
+        handle_command(get_all_projects)
+    ],
+    'no_command': [
+        "I don't know what you want from me",
+    ],
+}
+
+    if slack_client.rtm_connect():
+        print(f"{bot_name} now online.")
+        while True:
+            text_input, channel = parse_slack_output(slack_client.rtm_read())
+            if text_input and channel:
+                handle_command(text_input, channel)
+            time.sleep(1)  # websocket read delay
+    else:
+        failed_connect = 'Connection Failed'
+        log_error(failed_connect)
+        print(failed_connection)
