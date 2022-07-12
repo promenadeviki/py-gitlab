@@ -26,6 +26,15 @@ app = Flask(__name__)
 
 bolt_app = App(token=slack_bot_token, signing_secret=slack_sign_secret)
 
+def base_url():
+    """Set the GitLab API base URL."""
+   # protocol = 'https' if self.use_ssl else 'http'
+   # base_url = '{protocol}://{host}/api/{version}'.format(
+   #     protocol=protocol, host=self.host, version=self.Version
+   # )
+    base_url = "https://gitlab.com/api/v4"
+    return base_url
+
 
 class GitLab(object):
     # Use v4 gitlab api version. Others are deprecated in Python
@@ -33,7 +42,6 @@ class GitLab(object):
     ResponseError = GitLabServerError
     client = WebClient(slack_bot_token)
     handler = SlackRequestHandler(bolt_app)
-
 
     def __init__(self, host=None, private_token=None, use_ssl=True):
         '''
@@ -50,15 +58,6 @@ class GitLab(object):
     def __repr__(self):
         return self.__str__()
 
-
-    def base_url(self):
-        """Set the GitLab API base URL."""
-        protocol = 'https' if self.use_ssl else 'http'
-        base_url = '{protocol}://{host}/api/{version}'.format(
-            protocol=protocol, host=self.host, version=self.Version
-        )
-        return base_url
-
     def set_headers(self, private_token):
         """Set `PRIVATE_TOKEN` HTTP request header for restricted endpoints."""
         self.session = requests.Session()
@@ -69,10 +68,15 @@ class GitLab(object):
             )
         })
 
+
     def request(self, method, url, data={}, **kwargs):
         """Wrapper method for making requests to endpoints."""
-        url = self.base_url + url
-        res = self.session.request(method, url, params=kwargs, data=data)
+        url = "https://gitlab.com/api/v4"
+        print(url)
+        print(method, url, kwargs, data)
+        #res = self.session.request(method, url, params=kwargs, data=data)
+
+        res = self.session.request('GET', 'https://gitlab.com/api/v4', params=kwargs, data=data)
         if res.status_code not in [200, 201]:
             raise self.ResponseError(res.status_code, res.reason)
         if res.headers['Content-Type'] != 'application/json':
